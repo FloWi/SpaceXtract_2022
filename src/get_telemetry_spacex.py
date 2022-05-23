@@ -11,7 +11,7 @@ import cv2
 
 
 
-CONFIG_FILE_PATH = '../ConfigFiles/spacex/new_spacex.json'
+CONFIG_FILE_PATH = '../ConfigFiles/spacex/spacex_2022.json'
 
 
 KMH = 3.6
@@ -34,11 +34,15 @@ def check_data(prev_velocity, prev_time, cur_velocity, cur_time, prev_alt, cur_a
 def check_stage_switch(cur_time, cur_stage, prev_stage):
     return cur_stage != prev_stage and (cur_stage is not None and cur_time > 60)
            
-def data_to_json(time, velocity, altitude):
+def data_to_json(time, velocity_stage1, altitude_stage1, velocity_stage2, altitude_stage2):
+    velocity_stage2 = 0.0 if velocity_stage2 is None else velocity_stage2
+    altitude_stage2 = 0.0 if altitude_stage2 is None else altitude_stage2
     return json.dumps(OrderedDict(
         [('time', rtnd(time, PRECISION)),
-         ('velocity', rtnd(velocity, PRECISION)),
-         ('altitude', altitude)]
+         ('velocity-stage1', rtnd(velocity_stage1, PRECISION)),
+         ('altitude-stage1', altitude_stage1),
+         ('velocity-stage2', rtnd(velocity_stage2, PRECISION)),
+         ('altitude-stage2', altitude_stage2)]
     ))
 
 def write_to_file(file, string):
@@ -71,8 +75,8 @@ def get_data(cap, file, t0, out, name, live):
     dt = 1 / cap.get(cv2.CAP_PROP_FPS)
 
     cur_time = 0
-    prev_vel = 0
-    prev_altitude = 0
+    prev_vel_stage1 = 0
+    prev_altitude_stage1 = 0
     prev_time = 0
     start = False
     dropped_frames = 0
@@ -98,62 +102,70 @@ def get_data(cap, file, t0, out, name, live):
 
     _, frame = cap.read()
     _, t0 = session.extract_number(frame, 'time', decimal_point_conversion)
-    _, v0 = session.extract_number(frame, 'velocity', decimal_point_conversion)
-    dec, a0 = session.extract_number(frame, 'altitude', decimal_point_conversion)
+    _, v0 = session.extract_number(frame, 'velocity-stage1', decimal_point_conversion)
+    dec_stage1, a0 = session.extract_number(frame, 'altitude-stage1', decimal_point_conversion)
 
 
-    if dec:
+    if dec_stage1:
         a0 /= DECIMAL_CONVERSION
         
 
     if t0 is not None:
         prev_time = t0 - dt
-        prev_vel = v0/KMH
-        prev_altitude = a0
+        prev_vel_stage1 = v0/KMH
+        prev_altitude_stage1 = a0
+        prev_vel_stage2 = None
+        prev_altitude_stage2 = None
         cur_time = rtnd(t0, 3)
 
     while frame is not None:
-        _, velocity = session.extract_number(frame, 'velocity', decimal_point_conversion)
-        dec, altitude = session.extract_number(frame, 'altitude', decimal_point_conversion)
+        _, velocity_stage1 = session.extract_number(frame, 'velocity-stage1', decimal_point_conversion)
+        dec_stage1, altitude_stage1 = session.extract_number(frame, 'altitude-stage1', decimal_point_conversion)
 
-        if dec and altitude is not None:
-            altitude /= DECIMAL_CONVERSION
-            
+        if dec_stage1 and altitude_stage1 is not None:
+            altitude_stage1 /= DECIMAL_CONVERSION
+
+        _, velocity_stage2 = session.try_extract_number(frame, 'velocity-stage2', decimal_point_conversion)
+        dec_stage2, altitude_stage2 = session.try_extract_number(frame, 'altitude-stage2', decimal_point_conversion)
+
+        if dec_stage2 and altitude_stage2 is not None:
+            altitude_stage2 /= DECIMAL_CONVERSION
+
         show_frame(frame)    
             
         if cv2.waitKey(1) & 0xff == ord('q'):
             break
 
-        cur_stage = session.get_template_index(frame, 'stage') + 1
-        
-        if velocity is not None and altitude is not None and \
-                (check_data(prev_vel, prev_time, velocity/KMH, cur_time, prev_altitude, altitude)
-                 or check_stage_switch(cur_time, cur_stage, prev_stage)):
+        can_check_stage1 = velocity_stage1 is not None and altitude_stage1 is not None
+        # can_check_stage2 = velocity_stage2 is not None and altitude_stage2 is not None # maybe?
 
-            velocity /= KMH
+        if can_check_stage1 and check_data(prev_vel_stage1, prev_time, velocity_stage1 / KMH, cur_time, prev_altitude_stage1, altitude_stage1):
 
-            if cur_stage is not None and cur_stage != prev_stage:
-                prev_stage = cur_stage
+            velocity_stage1 /= KMH
 
-                time_file.write(json.dumps(OrderedDict([
-                    ('time', rtnd(cur_time, PRECISION)),
-                    ('stage', cur_stage)
-                ])) + '\n')
-                time_file.flush()
+            if velocity_stage2:
+                velocity_stage2 /= KMH
 
-            json_data = data_to_json(cur_time, velocity, altitude)
+            time_file.write(json.dumps(OrderedDict([
+                ('time', rtnd(cur_time, PRECISION))
+            ])) + '\n')
+            time_file.flush()
+
+            json_data = data_to_json(cur_time, velocity_stage1, altitude_stage1, velocity_stage2, altitude_stage2)
 
             if out:
-                print(data_to_json(cur_time, velocity, altitude))
+                print(data_to_json(cur_time, velocity_stage1, altitude_stage1, velocity_stage2, altitude_stage2))
 
             if start:
                 write_to_file(file, json_data)
 
-            prev_vel = velocity
-            prev_altitude = altitude
+            prev_vel_stage1 = velocity_stage1
+            prev_altitude_stage1 = altitude_stage1
+            prev_vel_stage2 = velocity_stage2
+            prev_altitude_stage2 = altitude_stage2
             prev_time = cur_time
 
-            if velocity > LAUNCH_VELOCITY:
+            if velocity_stage1 > LAUNCH_VELOCITY:
                 start = True
         else:
             dropped_frames += 1

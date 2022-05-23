@@ -4,13 +4,10 @@ from math import fabs
 import os
 
 
-
-
 class BaseExtract:
     """
     Extract data from frames when the location of the data is known and is constant
     """
-
 
     def __init__(self, image_dict):
         """
@@ -43,27 +40,21 @@ class BaseExtract:
         # Load images to image_dict
         self.read_images_from_dict()
 
-
-
-
     def read_images_from_dict(self):
         """
         Replace the paths in image_dict with the templates(images) they point to
         """
-        
+
         # A list of black and white versions of the templates
         for key in self.image_dict:
             img_lst = []
-        
+
             for path in self.image_dict[key][1]:
                 assert os.path.exists(path)
                 img_lst.append(self.prepare_frame(cv2.imread(path), [0, 1, 0, 1]))
 
             # Replace path list with template list
             self.image_dict[key][1] = img_lst
-
-
-
 
     @staticmethod
     def ratio_to_pixel(points, shape):
@@ -89,9 +80,6 @@ class BaseExtract:
             int(points[3] * shape[1])
         ]
 
-
-
-
     @staticmethod
     def pixel_to_ratio(points, shape):
         """
@@ -114,9 +102,6 @@ class BaseExtract:
             points[3] / shape[1]
         ]
 
-
-
-
     @staticmethod
     def crop_frame(frame, crop_points):
         """
@@ -130,12 +115,9 @@ class BaseExtract:
         frame_width = frame.shape[1]
 
         return frame[
-             int(crop_points[0] * frame_height): int(crop_points[1] * frame_height),
-             int(crop_points[2] * frame_width): int(crop_points[3] * frame_width)
-        ]
-
-
-
+               int(crop_points[0] * frame_height): int(crop_points[1] * frame_height),
+               int(crop_points[2] * frame_width): int(crop_points[3] * frame_width)
+               ]
 
     def prepare_frame(self, frame, points, thresh=150):
         """
@@ -151,8 +133,6 @@ class BaseExtract:
         _, roi = cv2.threshold(roi, thresh, 255, cv2.THRESH_BINARY)
 
         return roi
-
-
 
     def image_to_location(self, frame, template, thresh=0, crop_range=None):
         """
@@ -170,7 +150,7 @@ class BaseExtract:
             crop_range = [0, 1, 0, 1]
 
         frame = self.prepare_frame(frame, crop_range)
-                
+
         res = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
         loc = np.where(res >= thresh)
 
@@ -184,8 +164,6 @@ class BaseExtract:
                 max_p = probability
 
         return point
-
-
 
     @staticmethod
     def exists(frame, template, thresh):
@@ -209,8 +187,6 @@ class BaseExtract:
 
         return True
 
-
-
     @staticmethod
     def remove_duplicates(lst, min_distance=10):
         """
@@ -233,10 +209,6 @@ class BaseExtract:
 
         return lst
 
-
-
-
-
     @staticmethod
     def most_probably_template(image, templates):
         """
@@ -255,9 +227,6 @@ class BaseExtract:
 
         return probability_list.index(max(probability_list))
 
-
-
-
     def get_template_index(self, frame, key):
         """
         Get the index of the template(in the templates list) which is most likely to be in the image.
@@ -270,7 +239,6 @@ class BaseExtract:
         roi = self.prepare_frame(frame, self.image_dict[key][0])
         templates = self.image_dict[key][1]
         return self.most_probably_template(roi, templates)
-
 
     @staticmethod
     def image_to_digit_list(image, digit_templates, thresh):
@@ -301,11 +269,7 @@ class BaseExtract:
 
             digit += 1
 
-
         return digit_list
-
-
-
 
     @staticmethod
     def digit_list_to_number(digit_list):
@@ -322,24 +286,14 @@ class BaseExtract:
 
         return number
 
-
+    def get_template_distance(self, pos_list):
+        return [pos_list[i + 1] - pos_list[i] for i in range(len(pos_list) - 1)]
 
     def get_template_distance(self, pos_list):
-        return [pos_list[i+1] - pos_list[i] for i in range(len(pos_list)-1)]
+        return [pos_list[i + 1] - pos_list[i] for i in range(len(pos_list) - 1)]
 
-
-
-
-
-    def get_template_distance(self, pos_list):
-        return [pos_list[i+1] - pos_list[i] for i in range(len(pos_list)-1)]
-
-    
-    
     def decimal_point_conversion(self, lst):
         return False
-    
-
 
     def image_to_number(self, image, templates, threshold, lengths, decimal_func=None):
         """
@@ -352,7 +306,7 @@ class BaseExtract:
         :param lengths: Expected length of the field. (Number of digits).
         :return: Gap, The number in the image.
         """
-        
+
         if decimal_func is None:
             decimal_func = self.decimal_point_conversion
 
@@ -367,14 +321,11 @@ class BaseExtract:
 
         # Sort the digits of the velocity and altitude values by position on the frame.
         number_list.sort(key=lambda x: x[1])
-        
+
         gap = decimal_func([x[1] for x in number_list])
         number = self.digit_list_to_number(number_list)
 
         return gap, number
-
-
-
 
     def extract_number(self, frame, key, decimal_func=None):
         """
@@ -390,16 +341,6 @@ class BaseExtract:
         return gap, number
 
 
-
-
-
-
-
-
-
-
-
-
 class RelativeExtract(BaseExtract):
     """
     Extract data from frames when the location of the data is known and constant RELATIVE to an
@@ -407,7 +348,6 @@ class RelativeExtract(BaseExtract):
 
     parent: BaseExtract
     """
-
 
     def __init__(self, image_dict, anchor_range=None, anchor_moving=False):
         """
@@ -431,8 +371,6 @@ class RelativeExtract(BaseExtract):
         self.relative_image_dict = self.image_dict
         self.image_dict = None
 
-
-
     def prepare_image_dict(self, frame):
         """
         Prepare image_dict for frame
@@ -447,8 +385,6 @@ class RelativeExtract(BaseExtract):
 
         return self.image_dict is not None
 
-
-
     def search_anchor(self, frame):
         """
         Search anchor in 'frame' and set its location (self.anchor_location) accordingly
@@ -462,10 +398,10 @@ class RelativeExtract(BaseExtract):
             return False
 
         anchor_top_bottom_left_right = [
-                anchor_pixel_location[1],
-                anchor_pixel_location[1] + self.anchor_image.shape[0],
-                anchor_pixel_location[0],
-                anchor_pixel_location[0] + self.anchor_image.shape[1]
+            anchor_pixel_location[1],
+            anchor_pixel_location[1] + self.anchor_image.shape[0],
+            anchor_pixel_location[0],
+            anchor_pixel_location[0] + self.anchor_image.shape[1]
         ]
 
         anchor_ratio = np.array(self.pixel_to_ratio(anchor_top_bottom_left_right, frame.shape))
@@ -480,8 +416,6 @@ class RelativeExtract(BaseExtract):
 
         return True
 
-
-
     def relative_to_abs(self, points):
         return [
             self.anchor_location[0] + points[0],
@@ -489,7 +423,6 @@ class RelativeExtract(BaseExtract):
             self.anchor_location[2] + points[2],
             self.anchor_location[2] + points[3],
         ]
-
 
     def create_image_dict(self):
         """
@@ -502,7 +435,6 @@ class RelativeExtract(BaseExtract):
             if key != 'anchor':
                 self.image_dict[key] = self.relative_image_dict[key]
                 self.image_dict[key][0] = self.relative_to_abs(self.relative_image_dict[key][0])
-
 
     def get_template_index(self, frame, key):
         """
@@ -517,8 +449,6 @@ class RelativeExtract(BaseExtract):
 
         return super(RelativeExtract, self).get_template_index(frame, key)
 
-
-
     def extract_number(self, frame, key, decimal_func=None):
         """
         Get the number of 'key' in 'frame'
@@ -529,5 +459,11 @@ class RelativeExtract(BaseExtract):
         """
         if not self.prepare_image_dict(frame):
             return None
-        
+
         return super(RelativeExtract, self).extract_number(frame, key, decimal_func)
+
+    def try_extract_number(self, frame, key, decimal_func=None):
+        try:
+            return self.extract_number(frame, key, decimal_func)
+        except:
+            return None, None
